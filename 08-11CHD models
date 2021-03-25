@@ -1,0 +1,184 @@
+# 变量target为所预测的y
+# 基础
+import numpy as np # 处理数组
+import pandas as pd # 读取数据&&DataFrame
+import seaborn as sns
+import random
+# 制图
+import matplotlib.pyplot as plt 
+from matplotlib import rcParams # 定义参数
+from matplotlib.cm import rainbow # 配置颜色
+from matplotlib.colors import ListedColormap
+from mpl_toolkits.mplot3d import Axes3D
+# 数据处理
+from sklearn import preprocessing
+from sklearn import metrics #混淆矩阵
+from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import roc_auc_score, accuracy_score
+from sklearn.model_selection import cross_val_score # 交叉验证
+from sklearn.model_selection import KFold # k折交叉验证
+from sklearn.model_selection import train_test_split # 切割数据集
+from sklearn.preprocessing import StandardScaler # 特征缩放
+# 机器学习算法
+from sklearn.linear_model import LogisticRegression # 逻辑回归
+from sklearn.linear_model import Perceptron
+from sklearn.neighbors import KNeighborsClassifier # K近邻
+from sklearn.svm import SVC # 支持向量机
+from sklearn import svm # 支持向量机
+from sklearn.tree import DecisionTreeClassifier # 决策树
+from sklearn.ensemble import RandomForestClassifier # 随机森林
+from sklearn.tree import export_graphviz
+from sklearn.neural_network import MLPClassifier # 神经网络
+from xgboost import XGBClassifier # XGBoost
+from sklearn import linear_model
+from scipy import interp
+from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import GridSearchCV
+# 数据文件读取
+dataset = pd.read_csv('data.csv')
+# 相关性矩阵
+corrmat = dataset.corr()
+plt.figure(figsize=(20,20))
+g=sns.heatmap(corrmat,annot=True,cmap="RdYlGn", annot_kws={"size": 5})
+# 哑变量
+dataset = pd.get_dummies(dataset, columns=['sex', 'smoke', 'pre_hypertension'])
+# 特征变换
+ss = StandardScaler()
+columns_to_scale = ['age',  'height', 'weight', 'BMI', 'eGFR', 'T2DM',
+       'BG', 'C_peptide_2h', 'TC', 'TG', 'HDL-C', 'LDL-C', 'apoA', 'apoB',
+       'Lpa', 'WBC', 'RBC', 'Hb', 'plt', 'N_percentage', 'Fg', 'BUN', 'Scr',
+       'UA', 'TnT', 'Myo', 'CK_MB', 'pro_BNP', 'TSH', 'FT3', 'FT4', 'LA',
+       'LVIDd', 'LVIDs', 'IVSd', 'LVPWd', 'EF']
+dataset[columns_to_scale] = ss.fit_transform(dataset[columns_to_scale])
+
+dataset.head()
+# KNN算法 命名knn_classifier
+
+knn_scores = []
+for k in range(1, 41):
+    knn_classifier = KNeighborsClassifier(n_neighbors=k)
+    knn_classifier.fit(X_train, y_train)
+    knn_scores.append(cross_val_score(knn_classifier,X_train,y_train,cv=10,scoring='accuracy').mean())
+    # 对数据集进行5次随机划分为训练集和测试集，并对应5次测试，返回5次测试准确率accuracy的平均值，若要返回列表，删除.mean()
+    ## 在训练集和测试集上分布利用训练好的模型进行预测
+    train_predict=knn_classifier.predict(X_train)
+    test_predict=knn_classifier.predict(X_test)
+print(knn_scores)
+print('CV accuracy: %.3f +/- %.3f' % (np.mean(knn_scores), np.std(knn_scores)))
+#可视化数据
+plt.plot(range(1, 41), knn_scores)
+xticks = plt.xticks([i for i in range(1, 41)]) #调整坐标轴为1-20
+plt.xlabel('Value of K for KNN')
+plt.ylabel('Cross-Validated Accuracy')
+plt.title('K Neighbors Classifier scores for different K values')
+plt.show()
+## 在训练集和测试集上分布利用训练好的模型进行预测
+train_predict=knn_classifier.predict(X_train) #修改model变量名
+test_predict=knn_classifier.predict(X_test) #修改model变量名
+
+## 利用accuracy（准确度）【预测正确的样本数目占总预测样本数目的比例】评估模型效果
+print('The accuracy of the Model is:',metrics.accuracy_score(y_train,train_predict))
+print('The accuracy of the Model is:',metrics.accuracy_score(y_test,test_predict))
+
+## 查看混淆矩阵 (预测值和真实值的各类情况统计矩阵)
+confusion_matrix_result=metrics.confusion_matrix(test_predict,y_test)
+print('the confusion matrix result:\n',confusion_matrix_result)
+
+# 利用热力图对于结果进行可视化
+plt.figure(figsize=(8, 6))
+sns.heatmap(confusion_matrix_result, annot=True, cmap='Blues')
+plt.xlabel('Predicted labels')
+plt.ylabel('True labels')
+plt.show()
+#SVM算法
+svc_scores = []
+kernels = ['linear', 'poly', 'rbf', 'sigmoid'] # 'precomputed'
+for i in range(len(kernels)):
+    svc_classifier = SVC(kernel=kernels[i])
+    svc_scores.append(cross_val_score(svc_classifier,X_train,y_train,cv=10,scoring='accuracy').mean())
+print(svc_scores)
+print('CV accuracy: %.3f +/- %.3f' % (np.mean(svc_scores), np.std(svc_scores)))
+#内核评估柱状图
+colors = rainbow(np.linspace(0, 1, len(kernels))) # 色彩
+plt.bar(kernels, svc_scores, color=colors)
+for i in range(len(kernels)):
+    plt.text(i, svc_scores[i], svc_scores[i])
+plt.xlabel('Kernels')
+plt.ylabel('Scores')
+plt.title('Support Vector Classifier scores for different kernels')
+cv = StratifiedKFold(n_splits=10) #修改此处k折
+fig = plt.figure(figsize=(10, 5))
+ 
+mean_tpr = 0.0
+mean_fpr = np.linspace(0, 1, 100)
+all_tpr = []
+ 
+for i, (train, test) in enumerate(cv.split(X_train, y_train)):
+    probas = svm.fit(X_train.values[train], y_train.values[train].ravel()).predict_proba(X_train.values[test])#修改此处模型变量
+    
+    # 计算ROC曲线和曲线区域
+    fpr, tpr, thresholds = roc_curve(y_train.values[test], 
+                                     probas[:, 1])
+    mean_tpr += interp(mean_fpr, fpr, tpr)
+    
+    mean_tpr[0] = 0.0
+    
+    roc_auc = auc(fpr, tpr)
+    plt.plot(fpr, 
+             tpr, 
+             lw=1, 
+             label='ROC fold %d (area = %0.2f)' 
+                    % (i+1, roc_auc))
+    
+plt.plot([0, 1], 
+         [0, 1], 
+         linestyle='--', 
+         color=(0.6, 0.6, 0.6), 
+         label='random guessing')
+ 
+mean_tpr /= i+1
+# mean_tpr[-1] = 1.0
+mean_auc = auc(mean_fpr, mean_tpr)
+plt.plot(mean_fpr, mean_tpr, 'k--',
+         label='mean ROC (area = %0.2f)' % mean_auc, lw=2)
+plt.plot([0, 0, 1], 
+         [0, 1, 1], 
+         lw=2, 
+         linestyle=':', 
+         color='black', 
+         label='perfect performance')
+ 
+plt.xlabel('false positive rate')
+plt.ylabel('true positive rate')
+plt.title('Receiver Operator Characteristic')
+plt.legend(loc="lower right")
+plt.tight_layout()
+#混淆矩阵
+# calculate the fpr and tpr for all thresholds of the classification
+probs = svm.predict_proba(X_test) #修改model变量名
+preds = probs[:,1]
+fpr, tpr, threshold = metrics.roc_curve(y_test, preds)
+roc_auc = metrics.auc(fpr, tpr)
+#绘制单个ROC
+plt.title('Receiver Operating Characteristic')
+plt.plot(fpr, tpr, 'b', label = 'AUC = %0.2f' % roc_auc)
+plt.legend(loc = 'lower right')
+plt.plot([0, 1], 
+         [0, 1], 
+         linestyle='--', 
+         color=(0.6, 0.6, 0.6), 
+         label='random guessing')
+plt.ylabel('True Positive Rate')
+plt.xlabel('False Positive Rate')
+
+plt.show()
+#使用rbf进行预测
+svm = SVC(kernel='rbf', random_state=0, probability=True)
+svm.fit(X_train, y_train.values.ravel())
+y_pred2 = svm.predict(X_test)
+print('准确率: %.2f' % accuracy_score(y_test, y_pred2))
+param = {"gamma":[0.01,0.1,1,10,100],
+             "C":[0.01,0.1,1,10,100]}
+grid_search = GridSearchCV(SVC(kernel='rbf',random_state=0),n_jobs=-1,param_grid=param,cv=10,refit='AUC',return_train_score=True)
+grid_search.fit(X_train, y_train.values.ravel())
+print("选择的参数：", grid_search.best_params_)
